@@ -63,7 +63,7 @@ parser.add_option("-d", "--debug",
                   default=False,
                   action="store_true",
                   dest="debug",
-                  help="Show debug messages and information.")
+                  help="Show debug messages and informations.")
 
 opts, args = parser.parse_args()
 
