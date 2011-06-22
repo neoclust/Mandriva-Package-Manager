@@ -21,21 +21,10 @@
 //
 import QtQuick 1.0
 
-SplitterColumn {
-    id: status_area
-    property alias totalVisible: total.visible
-
-    Rectangle {
-        anchors.fill: parent
-        color:  syspal.dark
-    }
-
-    TotalOfMatches {
-        id: total
-        anchors {
-            left: parent.left
-            leftMargin: 10
-            verticalCenter: parent.verticalCenter
-        }
-    }
+Text {
+    width: parent.width
+    height: parent.height
+    text: itemValue? itemValue : ""
+    elide: Text.ElideRight
+    verticalAlignment: Text.AlignVCenter
 }

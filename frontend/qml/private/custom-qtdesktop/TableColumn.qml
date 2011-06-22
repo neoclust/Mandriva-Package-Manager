@@ -18,24 +18,16 @@
 //
 // Author(s): Paulo Belloni <paulo@mandriva.com>
 //
+//      NOTE: This is based on the homonimous element defined on qt-components-desktop
 //
 import QtQuick 1.0
+import components 1.0 as QDESK
 
-SplitterColumn {
-    id: status_area
-    property alias totalVisible: total.visible
-
-    Rectangle {
-        anchors.fill: parent
-        color:  syspal.dark
-    }
-
-    TotalOfMatches {
-        id: total
-        anchors {
-            left: parent.left
-            leftMargin: 10
-            verticalCenter: parent.verticalCenter
-        }
-    }
+QDESK.TableColumn {
+    property int index
+    property bool resizeEnabled: true
+    property bool dragEnabled: true
+    property string sortName: caption
+    property int contentWidth: width
 }
+

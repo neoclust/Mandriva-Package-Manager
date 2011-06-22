@@ -32,7 +32,7 @@ FocusScope {
         anchors.fill: parent
         leftMargin: search_image.width + search_image.anchors.leftMargin + 4
         rightMargin: clear_image.width + clear_image.anchors.rightMargin + 2
-        placeholderText: " type to search"
+        placeholderText: " " + qsTr("type to search")
         font.italic: true
         grabFocusOnHovering: true
     }
@@ -41,6 +41,8 @@ FocusScope {
         source: config._THEME_ICONS + config._EDIT_FIND_ICON
         width: height
         height: parent.height * 0.6
+        smooth: true
+        asynchronous: true
         anchors {
             left: parent.left
             leftMargin: 4
@@ -53,6 +55,8 @@ FocusScope {
         source: config._THEME_ICONS + config._EDIT_CLEAR_ICON
         width: height
         height: parent.height * 0.6
+        smooth: true
+        asynchronous: true
         anchors {
             right: parent.right
             rightMargin: 2

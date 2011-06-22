@@ -1,7 +1,3 @@
-//
-// Copyright (C) 2010-2011 Mandriva S.A <http://www.mandriva.com>
-// All rights reserved
-//
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation; either version 2 of the License, or
@@ -21,21 +17,17 @@
 //
 import QtQuick 1.0
 
-SplitterColumn {
-    id: status_area
-    property alias totalVisible: total.visible
-
-    Rectangle {
-        anchors.fill: parent
-        color:  syspal.dark
+ListModel {
+    ListElement {
+        title: QT_TR_NOOP("Category")
+        position: 0.0
     }
-
-    TotalOfMatches {
-        id: total
-        anchors {
-            left: parent.left
-            leftMargin: 10
-            verticalCenter: parent.verticalCenter
-        }
+    ListElement {
+        title: QT_TR_NOOP("Status")
+        position: 0.5
+    }
+    ListElement {
+        title: QT_TR_NOOP("Source")
+        position: 0.8
     }
 }

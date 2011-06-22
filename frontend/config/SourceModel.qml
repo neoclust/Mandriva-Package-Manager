@@ -1,8 +1,4 @@
-//
-// Copyright (C) 2010-2011 Mandriva S.A <http://www.mandriva.com>
-// All rights reserved
-//
-// This program is free software; you can redistribute it and/or modify
+﻿// This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation; either version 2 of the License, or
 // (at your option) any later version.
@@ -21,21 +17,15 @@
 //
 import QtQuick 1.0
 
-SplitterColumn {
-    id: status_area
-    property alias totalVisible: total.visible
-
-    Rectangle {
-        anchors.fill: parent
-        color:  syspal.dark
-    }
-
-    TotalOfMatches {
-        id: total
-        anchors {
-            left: parent.left
-            leftMargin: 10
-            verticalCenter: parent.verticalCenter
+Item {
+    property ListModel model: ListModel {
+        ListElement {
+            title: QT_TR_NOOP("Mandriva")
+            icon: "source-mandriva.png"
+        }
+        ListElement {
+            title: QT_TR_NOOP("Community")
+            icon: "source-community.png"
         }
     }
 }

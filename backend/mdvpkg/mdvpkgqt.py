@@ -20,17 +20,19 @@
 ## Author(s): J. Victor Martins <jvdm@mandriva.com>
 ##            Paulo Belloni <paulo@mandriva.com>
 ##
-## Changelog:
+##     NOTES:
 ## (PBelloni) - Refactory to make it more QT oriented.
 ##              Added DbusProxy, MdvPkgProxy and MdvPkgGroups
 ##              classes. get_package is now asynchronous.
-##              Added qtobjectfactory and class package
+##              Added qtobjectfactory (*) and class package
 ##              hierarchy. Results is now kept on a
 ##              dict, while still acquiring new data.
 ##              Added excludeTechnicalItems.
+##              (*) It is substituted by package module
+##              due to some issues about inheritance we
+##              have found. It is under investigation.
 ##
 """ mdvpkg API for Mandriva Application Manager. """
-
 
 import dbus
 import dbus.mainloop.glib
@@ -38,25 +40,43 @@ from PySide import QtCore
 import sys
 from operator import attrgetter
 sys.path.append('/usr/share/mandriva/mdvpkg')
-#sys.path.append('/mnt/LIB/MDV-chroot/usr/share/mandriva/mdvpkg')
 import mdvpkg
 import exceptions
-from qobjectclassfactory import QObjectClassFactory
+from package import Package
 
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
 # Application status:
-STATUS_NOT_INSTALLED = 'N'
-STATUS_INSTALLED = 'I'
-STATUS_UPGRADE = 'U'
+STATUS_NOT_INSTALLED = 'Not-Installed'
+STATUS_INSTALLED = 'Installed'
+STATUS_UPGRADE = 'Upgrade'
+STATUS_TRANSITION = 'Transition'
 
 # List of medias that are considered part of Mandriva's Software
 # source:
 MANDRIVA_MEDIAS = ('Main', 'Main Updates', 
                        'Main Testing', 'Main Backports')
 
-# Groups chosen to be considered technicals
-TECHNICAL_GROUPS = ('System/Libraries',)
+# TODO The frontend should take only those details it needs on
+# the different scenarios
+PACKAGE_DETAIL_ATTRIBUTES = (
+    'version',
+    'release',
+    'arch',
+    'epoch',
+    'size',
+    'group',
+    'summary',
+    'media',
+    'installtime',
+    'distepoch',
+#    'disttag',
+#    'requires',
+#    'provides',
+#    'conflict',
+#    'obsoletes'
+)
+
 
 class DbusProxy:
     bus = None
@@ -70,49 +90,6 @@ class DbusProxy:
                         path = mdvpkg.DBUS_PATH):
         obj = DbusProxy.bus.get_object(mdvpkg.DBUS_SERVICE, path)
         return dbus.Interface(obj, interface)
-
-
-PackageBase = QObjectClassFactory(
-    ('name', str),
-    ('version', str),
-    ('release', str),
-    ('arch', str),
-    ('status', str),
-    ('source', str),
-    ('category', str),
-    ('summary', str),
-    ('description', str),
-    ('size', str),
-    ('install_time', str)
-)
-
-class Package(PackageBase):
-
-    def __init__(self, parent, index):
-        super(Package, self).__init__(parent)
-        self._index = index
-        self._nfy_name.connect(self._nfy_fullname)
-        self._nfy_version.connect(self._nfy_fullname)
-        self._nfy_release.connect(self._nfy_fullname)
-        self._nfy_arch.connect(self._nfy_fullname)
-
-    def set_data(self, **kwargs):
-        for key, value in kwargs.iteritems():
-            if self.__dict__['_'+key] != value:
-                self.__dict__['_'+key] = value
-                eval('self._nfy_'+key+'.emit()')
-
-    def _get_index(self):
-        return self._index
-
-    def _get_fullname(self):
-        return "%s-%s-%s.%s" % (self.name, self.version, self.release,
-                                self.arch)
-
-    _nfy_fullname = QtCore.Signal()
-
-    index = QtCore.Property(int, _get_index)
-    fullname = QtCore.Property(unicode, _get_fullname, notify=_nfy_fullname)
 
 
 class MdvPkgResult(QtCore.QObject):
@@ -141,7 +118,14 @@ class MdvPkgResult(QtCore.QObject):
     result_finished = QtCore.Signal()
 
     def run(self):
-        self._on_threadLoop_started()
+        signals = { 'Package': self._on_package,
+                    'Ready': self._on_ready,
+                    'Error': self._on_error,
+                    'Finished': self._on_finished,
+                    'StatusChanged' : self._on_status_changed}
+        for signal, slot in signals.iteritems():
+            self._task.connect_to_signal(signal, slot)
+        self._task.Run()
 
     def release(self):
         """ Signal daemon we won't use the task anymore so it can
@@ -149,35 +133,38 @@ class MdvPkgResult(QtCore.QObject):
         """
         self._task.Cancel()
 
+    def _check_valid_request(self, action, idx):
+        if not self.ready or idx >= self.count:
+            raise ValueError, "Invalid %s request: %d" % (action, idx)
+        if idx < 0:
+            raise ValueError, "Got negative index (%d) for %s request" % (idx, action)
+
+    def install_package(self, idx):
+        """ Install package at idx. """
+        self._check_valid_request('install', idx)
+#        self._task.InstallPackage(idx)
+
+    def upgrade_package(self, idx):
+        """ Upgrade package at idx. """
+        self._check_valid_request('upgrade', idx)
+
+    def remove_package(self, idx):
+        """ Remove package at idx. """
+        self._check_valid_request('remove', idx)
+
     def get_package(self, idx):
         """ Returns the result at idx. """
-        if not self.ready or idx >= self.count:
-            return None
-        if idx < 0:
-            raise ValueError, "Got negative index:" + idx
+        self._check_valid_request('get', idx)
         if self._useServerCache:
             package = self._get_stored_package(idx)
             if package is None:
                 package = self._create_package(idx)
                 self._store_package(package)
-            self._task.Get(idx)
+            self._task.Get(idx, PACKAGE_DETAIL_ATTRIBUTES)
             return package
         else:
             return self._result[idx]
         
-    def get_package_details(self, idx):
-        """ If it's a cached list_packages result call GetDetails at
-        idx.
-        """
-        if not self.ready or idx >= self.count:
-            return None
-        if idx < 0:
-            raise ValueError, "Got negative index:" + idx
-        if not self._useServerCache:
-            raise ValueError, \
-                "Can't use get_package_details in non-cached result."
-        self._task.GetDetails(idx)
-
     def sort(self, key, reverse=False):
         """ Ask mdvpkg to sort packages and returns iterator. """
         self._task.Sort(key, reverse)
@@ -209,17 +196,6 @@ class MdvPkgResult(QtCore.QObject):
         if self.error:
             raise MdvPkgError(self.error)
 
-    def _on_threadLoop_started(self):
-        signals = { 'Package': self._on_package,
-                    'PackageDetails': self._on_package_details,
-                    'Ready': self._on_ready,
-                    'Error': self._on_error,
-                    'Finished': self._on_finished,
-                    'StatusChanged' : self._on_status_changed}
-        for signal, slot in signals.iteritems():
-            self._task.connect_to_signal(signal, slot)
-        self._task.Run()
-
     #FIXME - have to verify status
     def _on_status_changed(self, status):
         self._check_error()
@@ -232,39 +208,20 @@ class MdvPkgResult(QtCore.QObject):
 
     def _on_ready(self, count):
         self._check_error()
-        self.count = count
+        self.count = int(count)
         self.ready = True
         self.result_ready.emit()
 
-    def _on_package(self, index, nvra, summary, status, media, group, updates):
+    def _on_package(self, index, name, mdvpkg_status, installed_details, upgrade_details):
         self._check_error()
-        name, version, release, arch = nvra
-        has_upgrades, has_downgrades = updates
-        if media in MANDRIVA_MEDIAS:
-            source = 'Mandriva'
+        installed_details = list(installed_details)
+        upgrade_details = list(upgrade_details)
+        status = self._convert_status(mdvpkg_status)
+        if status == STATUS_NOT_INSTALLED:
+            details = upgrade_details[0]# if upgrade_details else installed_details[0]
         else:
-            source = 'Community'
-        group_folder = group.split('/')[0]
-        for (category, folders_set) in MdvPkgQt.groups:
-            if group_folder in folders_set:
-                category = category
-                break
-            else:
-                category = 'System'
-        data = {
-            'name' : name,
-            'version' : version,
-            'release' : release,
-            'arch' : arch,
-            'summary' : summary,
-            'category' : category,
-            'source' : source,
-            'status' : self._get_status(status, has_upgrades)
-        }
-        self._store_package_data(index, data)
+            details = installed_details[0]# if installed_details else  upgrade_details[0]
 
-    def _on_package_details(self, index, details):
-        self._check_error()
         if details['media'] in MANDRIVA_MEDIAS:
             source = 'Mandriva'
         else:
@@ -276,29 +233,35 @@ class MdvPkgResult(QtCore.QObject):
                 break
             else:
                 category = 'System'
-        status = self._get_status(details['status'],
-                                  details['has_upgrades'])
+
         data = {
-            'status' : status,
-            'source' : source,
+            'name' : name,
+            'version' : details['version'],
+            'release' : details['release'],
+            'arch' : details['arch'],
+            'summary' : details['summary'],
             'category' : category,
-            'description' : details['description'],
+            'source' : source,
+            'group' : details['group'],
+            'media' : details['media'],
+            'status' : status,
+#            'description' : details['description'],
             'size' : details['size'],
-            'install_time' : details['installtime']
+            'installtime' : details['installtime'],
+            'distepoch' : details['distepoch'],
         }
         self._store_package_data(index, data)
 
     def _on_error(self, code, message):
         self.error = (code, message)
 
-    def _get_status(self, mdvpkg_status, has_upgrades):
+    def _convert_status(self, mdvpkg_status):
         if mdvpkg_status == 'new':
             return STATUS_NOT_INSTALLED
+        elif mdvpkg_status == 'upgrade':
+            return STATUS_UPGRADE
         else:
-            if has_upgrades:
-                return STATUS_UPGRADE
-            else:
-                return STATUS_INSTALLED
+            return STATUS_INSTALLED
 
 
 class MdvPkgProxy(QtCore.QObject):
@@ -313,7 +276,7 @@ class MdvPkgProxy(QtCore.QObject):
             """ Returns the d-bus interface object for the task. """
             method = self.mainIface.get_dbus_method(taskName)
             try:
-                task_path = method(*args)
+                task_path = method(args)
                 return DbusProxy.createInterface(mdvpkg.DBUS_TASK_INTERFACE, task_path)
             except:
                 raise
@@ -404,9 +367,8 @@ class MdvPkgQt(MdvPkgProxy):
                         statuses=None,
                         source=None,
                         categories=None,
-                        includeTechnicalItems=None,
                         useServerCache=False):
-        task = self.create_task('ListPackages')
+        task = self.create_task('ListPackages', *PACKAGE_DETAIL_ATTRIBUTES)
         if useServerCache:
             task.SetCached()
         if patterns:
@@ -418,7 +380,9 @@ class MdvPkgQt(MdvPkgProxy):
                 if status == STATUS_NOT_INSTALLED:
                     task.FilterNew(False)
                 if status == STATUS_UPGRADE:
-                    task.FilterUpgrade(False)                
+                    task.FilterUpgrade(False)
+                if status == STATUS_TRANSITION:
+                    task.FilterTransition(False)
         if source:
             if source not in ('Mandriva', 'Community'):
                 raise ValueError('Unknown source: (%s)' % source)
@@ -429,6 +393,4 @@ class MdvPkgQt(MdvPkgProxy):
                     raise ValueError, 'Unknown category: (%s)' % cat
                 filter_list = list(MdvPkgQt.groups.groups_map[cat])
                 task.FilterGroup(filter_list, False)
-        if not includeTechnicalItems:
-            task.FilterGroup(TECHNICAL_GROUPS, True)
         return self._create_result(task, useServerCache)

@@ -21,73 +21,28 @@
 //
 import QtQuick 1.0
 
-Panel {
+//Loader {
+Item {
     id: panel
-    property alias contentHeight: filter_list.contentHeight
-    property alias panelTitle: title.text
-    property alias currentFilter: banner.text
-    property bool needsContraction: inactiveHeight < preferredHeight
-    property bool isCurrentPanel: false
+    property string panelTitle: ""
+    property string currentFilter: ""
     property string markedItem: ""
+    property bool isCurrentPanel: false
+    property alias listHeight: component.listHeight
+    property alias filterCount: component.filterCount
+    property alias minimumSize: component.minimumSize
+    property alias preferredSize: component.preferredSize
+    property alias maximumSize: component.maximumSize
+    property alias filterGroupName: component.filterGroupName
 
-    function _getPreferredHeight() {
-        var pref = title.height + filter_list.height + 20; //20 bottomMargin workaround
-        if (pref > filters_area.expandedHeight)
-            return filters_area.expandedHeight;
-        else
-            return pref;
+    //    Component {
+    //        id: panel_component
+    FilterGroupPanelComponent {
+        id: component
+        anchors.fill: parent
     }
+    //    }
 
-    preferredHeight: _getPreferredHeight()
-    Text {
-        id: title
-        height: font.pointSize + 4 // 4 for bold
-
-        color: config._LEFTPANEL_FONT_COLOR
-        font {
-            italic: true
-            pointSize: 11
-        }
-        anchors {
-            horizontalCenter: parent.horizontalCenter
-            top: panel.top
-            topMargin: 5
-        }
-    }
-    Text {
-        id: banner
-        function _visible() {
-            return !panel.isCurrentPanel
-                    && text != ""
-                   && panel.needsContraction;
-        }
-        height: font.pointSize + 4 // 4 for bold
-        visible: _visible()
-        color: config._LEFTPANEL_FONT_COLOR
-        font {
-            pointSize: 11
-            bold: true
-        }
-        anchors {
-            horizontalCenter: parent.horizontalCenter
-            top: title.bottom
-            topMargin: 15
-        }
-    }
-    FilterGroupList {
-        id: filter_list
-        filterGroupName: panel.panelTitle
-        height: childrenRect.height
-        visible: isCurrentPanel || !panel.needsContraction
-        anchors {
-            left: panel.left
-            leftMargin: 10
-            right: panel.right
-            top: title.bottom
-            topMargin: 15
-        }
-    }
-    onPreferredHeightChanged: {
-        filters_area.recalculateChildrenHeight();
-    }
+    //    //FIXME - It is supposed to be configurable and dynamically changed
+    //    sourceComponent: panel_component
 }
